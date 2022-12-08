@@ -1,7 +1,7 @@
 package dyndb
 
 type tx struct {
-	*connection
+	*Connection
 }
 
 func (t *tx) Commit() error {
