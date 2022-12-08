@@ -36,7 +36,6 @@ The Dynamodb driver accepts the following DSN
     - credURL: (url encoded) local location or URL supported by  [Scy](https://github.com/viant/scy)
     - credKey: optional (url encoded) [Scy](https://github.com/viant/scy) secret manager key or key location
     - credID: [Scy](https://github.com/viant/scy) resource secret ID
-    - credJSON: rawURL base64 encoded cred JSON (not recommended)
     - roleArn, session to use assumed role
 
 
