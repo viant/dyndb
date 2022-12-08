@@ -66,7 +66,7 @@ type Publication struct {
 
 func main() {
 
-  db, err := sql.Open("dynamodb", "dynamodb://localhost:8000/")
+  db, err := sql.Open("dynamodb", "dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy")
   if err != nil {
     log.Fatalln(err)
   }

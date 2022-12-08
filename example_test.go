@@ -16,7 +16,7 @@ func ExampleConnection_PrepareContext() {
 		IsTravel  bool
 		IsFinance bool
 	}
-	db, err := sql.Open("dynamodb", "dynamodb://localhost:8000/")
+	db, err := sql.Open("dynamodb", "dynamodb://localhost:8000/us-west-1?cred=aws-e2e")
 	if err != nil {
 		log.Fatalln(err)
 	}
