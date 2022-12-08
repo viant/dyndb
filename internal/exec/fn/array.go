@@ -30,12 +30,28 @@ func (a *arrayExists) Exec(value interface{}, state *exec.State) (interface{}, e
 		return false, err
 	}
 	value = elements[0]
+
+	if candidates, ok := value.([]interface{}); ok {
+		return a.hasMatch(candidates, elements), nil
+	}
+
 	if err = a.init(value); err != nil {
 		return nil, err
 	}
 	ptr := xunsafe.AsPointer(value)
 	exists := a.elementExists(ptr, elements[1:])
 	return exists, nil
+}
+
+func (a *arrayExists) hasMatch(candidates []interface{}, elements []interface{}) bool {
+	for _, candidate := range candidates {
+		for _, elem := range elements[1:] {
+			if elem == candidate {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *arrayExists) init(value interface{}) error {
@@ -121,7 +137,7 @@ func (a *arrayExists) sliceItem(ptr unsafe.Pointer, i int) interface{} {
 	return candidate
 }
 
-func newArrayExists(call *expr.Call, rowType *exec.Type) (exec.Function, reflect.Type, error) {
+func NewArrayExists(call *expr.Call, rowType *exec.Type) (exec.Function, reflect.Type, error) {
 	fn, err := newArrayExistsFn(call, rowType)
 	if err != nil {
 		return nil, nil, err

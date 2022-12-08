@@ -8,6 +8,7 @@ var attributeTypeCast = map[string]string{
 	"ints":     "ns",
 	"decimals": "ns",
 	"map":      "m",
+	"list":     "l",
 }
 
 var nativeFunctions = map[string]bool{

@@ -148,8 +148,16 @@ func decoderFor(t reflect.Type, required bool) (func(dec *gojay.Decoder) (interf
 			return asStrings, nil
 		case reflect.Uint8:
 			return asBytes, nil
+		case reflect.Interface:
+			return asInterface, nil
 
 		}
 	}
 	return nil, fmt.Errorf("unsupported type: %s", t.String())
+}
+
+func asInterface(dec *gojay.Decoder) (interface{}, error) {
+	aList := &list{object: &wrapper{}}
+	err := aList.UnmarshalJSONObject(dec)
+	return aList.items, err
 }

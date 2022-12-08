@@ -23,7 +23,7 @@ func TestNewArrayExists(t *testing.T) {
 		{
 			description: "single element exists",
 			expr:        "ARRAY_EXISTS(Collection, 'ElemX')",
-			state:       exec.newState(exec.NewType(false), nil),
+			state:       exec.NewState(exec.NewType(false), nil),
 			initState: func(state *exec.State) {
 				state.Type.Add("Collection", "Collection", "", false)
 				state.Fields = []driver.Value{[]string{"Elem1", "Elem2", "ElemX", "ElemN"}}
@@ -33,7 +33,7 @@ func TestNewArrayExists(t *testing.T) {
 		{
 			description: "single element not exists",
 			expr:        "ARRAY_EXISTS(Collection, 'Elem2')",
-			state:       exec.newState(exec.NewType(false), nil),
+			state:       exec.NewState(exec.NewType(false), nil),
 			initState: func(state *exec.State) {
 				state.Type.Add("Collection", "Collection", "", false)
 				state.Fields = []driver.Value{[]string{"Elem1", "ElemX", "ElemN"}}
@@ -42,7 +42,7 @@ func TestNewArrayExists(t *testing.T) {
 		{
 			description: "ints not exists",
 			expr:        "ARRAY_EXISTS(Collection, 123)",
-			state:       exec.newState(exec.NewType(false), nil),
+			state:       exec.NewState(exec.NewType(false), nil),
 			initState: func(state *exec.State) {
 				state.Type.Add("Collection", "Collection", "", false)
 				state.Fields = []driver.Value{[]int{1, 2, 3}}
@@ -51,11 +51,22 @@ func TestNewArrayExists(t *testing.T) {
 		{
 			description: "int  exists",
 			expr:        "ARRAY_EXISTS(Collection, 4)",
-			state:       exec.newState(exec.NewType(false), nil),
+			state:       exec.NewState(exec.NewType(false), nil),
 			initState: func(state *exec.State) {
 				state.Type.Add("Collection", "Collection", "", false)
 				state.Fields = []driver.Value{[]int{1, 2, 3, 4, 5}}
 			},
+			expect: true,
+		},
+		{
+			description: "interface  exists",
+			expr:        "ARRAY_EXISTS(Collection, 4)",
+			state:       exec.NewState(exec.NewType(false), nil),
+			initState: func(state *exec.State) {
+				state.Type.Add("Collection", "Collection", "", false)
+				state.Fields = []driver.Value{[]interface{}{1, 2, 3, 4, 5}}
+			},
+			expect: true,
 		},
 	}
 
@@ -64,7 +75,7 @@ func TestNewArrayExists(t *testing.T) {
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
-		f, fType, err := fn.newArrayExists(call, testCase.state.Type)
+		f, fType, err := fn.NewArrayExists(call, testCase.state.Type)
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}

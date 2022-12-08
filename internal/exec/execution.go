@@ -255,11 +255,21 @@ func (e *Execution) initInsert(desc *types.TableDescription) error {
 				}
 				builder.WriteString(">>")
 				continue
+			case "list":
+				builder.WriteString("[")
+				for j, arg := range actual.Args {
+					if j > 0 {
+						builder.WriteString(",")
+					}
+					builder.WriteString(sqlparser.Stringify(arg))
+				}
+				builder.WriteString("]")
+				continue
 			case "map":
 				args := actual.Raw[1 : len(actual.Raw)-1]
 				builder.WriteString(args)
 				continue
-			case "e":
+			case "t":
 				args := actual.Raw[1 : len(actual.Raw)-1]
 				builder.WriteString(args)
 				continue
@@ -407,7 +417,7 @@ func NewQuery(table string, query *query.Select, desc *types.TableDescription) (
 
 func (e *Execution) initState() {
 	e.state.New = func() interface{} {
-		return newState(e.Type, nil)
+		return NewState(e.Type, nil)
 	}
 }
 

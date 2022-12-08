@@ -6,17 +6,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/toolbox"
-	"os"
 	"testing"
 )
 
 func TestStatement_Query(t *testing.T) {
 
-	dsn := os.Getenv("TEST_DSN")
-	db, err := sql.Open("dynamodb", dsn)
-	//db, err := sql.Open("dynamodb", "dynamodb://localhost:8000/us-west-1?cred=aws-e2e")
+	//dsn := os.Getenv("TEST_DSN")
+	//db, err := sql.Open("dynamodb", dsn)
+	db, err := sql.Open("dynamodb", "dynamodb://localhost:8000/us-west-1?cred=aws-e2e")
 	if err != nil {
-		t.Skipf("failed to connect to db %w", err)
+		t.Skipf("failed to connect to db %v", err)
 		return
 	}
 	//db, err := sql.Open("dynamodb", "dynamodb://aws/us-west-1?cred=aws-e2e")
@@ -88,8 +87,8 @@ func TestStatement_Query(t *testing.T) {
 				`CREATE TABLE IF NOT EXISTS Publication(
 				ISBN TEXT HASH KEY,
 				Published INT RANGE KEY)`,
-				`INSERT INTO Publication(ISBN, Name, Published, Status, Categories) VALUES('AAA-BBB', 'Title 1', 20020121, 1, ARRAY('TRAVEL', 'FINANCE'))`,
-				`INSERT INTO Publication(ISBN, Name, Published, Status, Categories) VALUES('AAA-XXX', 'Title 2', 20020121, 1, ARRAY('FINANCE'))`,
+				`INSERT INTO Publication(ISBN, Name, Published, Status, Categories) VALUES('AAA-BBB', 'Title 1', 20020121, 1, LIST('TRAVEL', 'FINANCE'))`,
+				`INSERT INTO Publication(ISBN, Name, Published, Status, Categories) VALUES('AAA-XXX', 'Title 2', 20020121, 1, LIST('FINANCE'))`,
 			},
 			SQL: `SELECT ISBN, Name, 
        				ARRAY_EXISTS(Categories, 'TRAVEL') AS IS_TRAVEL ,

@@ -142,7 +142,7 @@ func (s *State) Reconcile() error {
 	return err
 }
 
-func newState(sType *Type, args []driver.NamedValue) *State {
+func NewState(sType *Type, args []driver.NamedValue) *State {
 	return &State{
 		Type: sType,
 		Args: args,
