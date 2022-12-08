@@ -42,7 +42,7 @@ The Dynamodb driver accepts the following DSN
 ## Usage:
 
 
-The following is a very simple example of CRUD operations
+The following is a very simple example of query operation
 
 ```go
 package main
