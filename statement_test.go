@@ -31,6 +31,7 @@ func TestStatement_Query(t *testing.T) {
 		Categories []string
 		IsTravel   bool
 		IsFinance  bool
+		M          map[string]interface{}
 	}
 
 	var testCases = []struct {
@@ -39,6 +40,7 @@ func TestStatement_Query(t *testing.T) {
 		SQL         string
 		append      func(rows *sql.Rows, records *[]interface{}) error
 		expect      string
+		skip        bool
 	}{
 		{
 			description: "simple select",
@@ -143,11 +145,69 @@ func TestStatement_Query(t *testing.T) {
 	}
 ]`,
 		},
+
+		{
+			description: "query single",
+			initSQL: []string{
+				`DROP TABLE IF EXISTS Publication`,
+				`CREATE TABLE IF NOT EXISTS Publication(
+				ISBN TEXT HASH KEY,
+				Published INT RANGE KEY)`,
+				`INSERT INTO Publication(ISBN, Name, Published, Status, Categories) VALUES('AAA-BBB', 'Title 1', 20020121, 1, ARRAY('TRAVEL', 'FINANCE'))`,
+				`INSERT INTO Publication(ISBN, Name, Published, Status, Categories) VALUES('AAA-XXX', 'Title 2', 20020121, 1, ARRAY('FINANCE'))`,
+			},
+			SQL: `SELECT ISBN, Name FROM Publication t WHERE (ISBN = 'AAA-BBB') AND  1=1`,
+			append: func(rows *sql.Rows, records *[]interface{}) error {
+				record := &Publication{}
+				err = rows.Scan(&record.ISBN, &record.Name)
+				*records = append(*records, record)
+				return err
+			},
+			expect: `[
+	{
+		"ISBN": "AAA-BBB",
+		"Name": "Title 1"
+	}
+]`,
+		},
+
+		{
+			description: "query with map",
+			initSQL: []string{
+				`DROP TABLE IF EXISTS Publication`,
+				`CREATE TABLE IF NOT EXISTS Publication(
+				ISBN TEXT HASH KEY,
+				Published INT RANGE KEY)`,
+				`INSERT INTO Publication(ISBN, Name, Published, Status, InfoMap) VALUES('AAA-BBB', 'Title 1', 20020121, 1, Map({'k1':[1,2,3]}))`,
+				`INSERT INTO Publication(ISBN, Name, Published, Status, InfoMap) VALUES('AAA-XXX', 'Title 2', 20020121, 1, Map({'k2':[1,2,3]}))`,
+			},
+			SQL: `SELECT ISBN, Name, InfoMap FROM Publication`,
+			append: func(rows *sql.Rows, records *[]interface{}) error {
+				record := &Publication{}
+				err = rows.Scan(&record.ISBN, &record.Name, &record.M)
+				*records = append(*records, record)
+				return err
+			},
+			expect: `[{"@indexBy@":"ISBN"},
+	{
+		"ISBN": "AAA-XXX",
+		"Name": "Title 2"
+	},
+	{
+		"ISBN": "AAA-BBB",
+		"Name": "Title 1"
+	}
+]`,
+			skip: true,
+		},
 	}
 
 outer:
 	for _, testCase := range testCases {
-
+		if testCase.skip {
+			t.Skip(testCase.description)
+			continue
+		}
 		for _, SQL := range testCase.initSQL {
 			_, err := db.Exec(SQL)
 			if !assert.Nil(t, err, testCase.description) {

@@ -130,9 +130,6 @@ func ParseDSN(dsn string) (*Config, error) {
 	if err = cfg.initialiseSecrets(); err != nil {
 		return nil, err
 	}
-	if cfg.Endpoint == "" {
-		return nil, fmt.Errorf("invalid dsn")
-	}
 	return cfg, nil
 }
 

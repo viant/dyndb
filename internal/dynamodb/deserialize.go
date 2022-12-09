@@ -52,6 +52,7 @@ func (m *DeserializeMiddleware) HandleDeserialize(ctx context.Context, in middle
 	ringBuffer := smithyio.NewRingBuffer(buff[:])
 	body := io.TeeReader(response.Body, ringBuffer)
 	data, err := ioutil.ReadAll(body)
+	//fmt.Printf("%s\n", data)
 	if err != nil && err != io.EOF {
 		var snapshot bytes.Buffer
 		io.Copy(&snapshot, ringBuffer)
@@ -83,7 +84,7 @@ func (m *DeserializeMiddleware) HandleDeserialize(ctx context.Context, in middle
 	return out, metadata, err
 }
 
-//NewDeserializeMiddleware returns deserializer
+//NewDeserializeMiddleware returns deserializerj
 func NewDeserializeMiddleware(aType *exec.Type) *DeserializeMiddleware {
 	result := &DeserializeMiddleware{}
 	result.Output = NewExecuteStatementOutput(aType)
