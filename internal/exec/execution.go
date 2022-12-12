@@ -10,6 +10,7 @@ import (
 	del "github.com/viant/sqlparser/delete"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/insert"
+	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlparser/table"
 	"github.com/viant/sqlparser/update"
@@ -33,20 +34,21 @@ const (
 type (
 	//Execution represent execution
 	Execution struct {
-		Kind     Kind
-		SQL      string
-		Table    string
-		HasTable bool
-		query    *query.Select
-		insert   *insert.Statement
-		update   *update.Statement
-		delete   *del.Statement
-		Create   *table.Create
-		Drop     *table.Drop
-		Type     *Type
-		Parti    *PartiQL
-		Limit    *int
-		state    sync.Pool
+		Kind          Kind
+		SQL           string
+		Table         string
+		HasTable      bool
+		query         *query.Select
+		insert        *insert.Statement
+		update        *update.Statement
+		delete        *del.Statement
+		Create        *table.Create
+		Drop          *table.Drop
+		Type          *Type
+		Parti         *PartiQL
+		Limit         *int32
+		state         sync.Pool
+		criteriaParam string
 	}
 
 	//PartiQL represent PrtiQA
@@ -65,15 +67,47 @@ func (e *Execution) initCriteria() error {
 	if qualify == nil {
 		return nil
 	}
-	switch actual := qualify.X.(type) {
+	err := e.parseCriteria(qualify.X)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e *Execution) parseCriteria(x node.Node) error {
+	if x == nil {
+		return nil
+	}
+	var paramName string
+	var ok bool
+	var err error
+	switch actual := x.(type) {
+	case *expr.Ident, *expr.Selector:
+		e.criteriaParam = sqlparser.Stringify(actual)
+	case *expr.Placeholder:
+		e.Type.AddCriteria(NewPlaceholder(e.criteriaParam))
+	case *expr.Parenthesis:
+		return e.parseCriteria(actual.X)
 	case *expr.Binary:
-		paramName := ""
-		if actual.HasIdentity() {
-			paramName = sqlparser.Stringify(actual.Identity())
+		paramName, ok, err = e.appendPlaceholder(actual.X, actual.Y)
+		if ok || err != nil {
+			return err
+		}
+		paramName, ok, err = e.appendPlaceholder(actual.Y, actual.X)
+		if ok || err != nil {
+			return err
 		}
 		switch strings.ToLower(actual.Op) {
 		case "in":
+			var nodeToCheck node.Node
 			group := actual.Parenthesis()
+			if group == nil {
+				if yOp, ok := actual.Y.(*expr.Binary); ok {
+					if group = yOp.Parenthesis(); group != nil {
+						nodeToCheck = yOp.Y
+					}
+				}
+			}
 			list, err := sqlparser.ParseList(strings.Trim(group.Raw, "()"))
 			if err != nil {
 				return err
@@ -83,15 +117,29 @@ func (e *Execution) initCriteria() error {
 					e.Type.AddCriteria(NewPlaceholder(paramName))
 				}
 			}
-		default:
-			if actual.HasPlaceholder() {
-				e.Type.AddCriteria(NewPlaceholder(paramName))
+			if nodeToCheck != nil {
+				return e.parseCriteria(nodeToCheck)
 			}
+			return nil
 		}
-	default:
-		return fmt.Errorf("not supported criteria: %T", actual)
+		if err = e.parseCriteria(actual.X); err != nil {
+			return err
+		}
+		return e.parseCriteria(actual.Y)
 	}
 	return nil
+}
+
+func (e *Execution) appendPlaceholder(x, y node.Node) (string, bool, error) {
+	paramName := ""
+	if ident := expr.Identity(x); ident != nil {
+		paramName = sqlparser.Stringify(ident)
+		if _, ok := y.(*expr.Placeholder); ok {
+			e.Type.AddCriteria(NewPlaceholder(paramName))
+			return paramName, true, nil
+		}
+	}
+	return paramName, false, nil
 }
 
 func (e *Execution) buildQuery() {
@@ -123,9 +171,8 @@ func (e *Execution) buildQuery() {
 	if query.Qualify != nil {
 		qualifies = append(qualifies, sqlparser.Stringify(query.Qualify.X))
 	}
-	if e.query.Qualify != nil {
+	if query != e.query && e.query.Qualify != nil {
 		qualifies = append(qualifies, sqlparser.Stringify(e.query.Qualify))
-
 	}
 	if len(qualifies) > 0 {
 		builder.WriteString(" WHERE ")
@@ -139,6 +186,7 @@ func (e *Execution) buildQuery() {
 		builder.WriteString(" ORDER BY ")
 		builder.WriteString(sqlparser.Stringify(e.query.OrderBy))
 	}
+
 	e.Parti = &PartiQL{
 		Query: builder.String(),
 	}
@@ -404,7 +452,8 @@ func NewQuery(table string, query *query.Select, desc *types.TableDescription) (
 	}
 	if limit := query.Limit; limit != nil {
 		value, _ := strconv.Atoi(limit.Value)
-		result.Limit = &value
+		limit := int32(value)
+		result.Limit = &limit
 	}
 	if err := result.initQuery(desc); err != nil {
 		return nil, err

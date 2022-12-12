@@ -14,7 +14,7 @@ require (
 	github.com/viant/afs v1.16.1-0.20220601210902-dc23d64dda15
 	github.com/viant/assertly v0.4.8
 	github.com/viant/scy v0.4.1
-	github.com/viant/sqlparser v0.2.0
+	github.com/viant/sqlparser v0.3.0
 	github.com/viant/toolbox v0.34.5
 	github.com/viant/xunsafe v0.8.1-0.20220517184704-270ed1a5aec9
 )

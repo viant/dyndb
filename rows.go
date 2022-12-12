@@ -24,7 +24,7 @@ type Rows struct {
 	index        int
 	nextToken    *string
 	ql           string
-	limit        *int
+	limit        *int32
 }
 
 func (r *Rows) executeQueryStatement(ctx context.Context) error {
@@ -32,6 +32,7 @@ func (r *Rows) executeQueryStatement(ctx context.Context) error {
 		Statement:  &r.ql,
 		NextToken:  r.nextToken,
 		Parameters: r.parameters,
+		Limit:      r.limit,
 	}, func(options *dynamodb.Options) {
 		options.APIOptions = append(options.APIOptions, func(stack *middleware.Stack) error {
 			stack.Deserialize.Clear()
@@ -86,6 +87,7 @@ func (r *Rows) Next(dest []driver.Value) error {
 		}
 	}
 	output := r.deserializer.Output
+
 	row := output.Rows[r.index]
 	r.index++
 	data := output.Data[row.Begin:row.End]
@@ -101,7 +103,9 @@ func (r *Rows) Next(dest []driver.Value) error {
 // hasNext returns true if there is next row to fetch.
 func (r *Rows) hasNext() bool {
 	if r.limit != nil {
-		return r.index < *r.limit
+		if withinLimit := r.index < int(*r.limit); !withinLimit {
+			return withinLimit
+		}
 	}
 	return r.index < len(r.deserializer.Output.Rows)
 }
@@ -120,6 +124,8 @@ func (r *Rows) ColumnTypeDatabaseTypeName(index int) string {
 		return "INT"
 	case reflect.Float64:
 		return "DECIMAL"
+	case reflect.Bool:
+		return "BOOLEAN"
 	case reflect.String:
 		return "STRING"
 	case reflect.Slice:

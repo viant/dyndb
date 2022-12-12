@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	ndynamodb "github.com/viant/dyndb/internal/dynamodb"
 	"github.com/viant/dyndb/internal/exec"
+
 	//load buildin functions
 	_ "github.com/viant/dyndb/internal/exec/fn"
 	"time"
@@ -16,6 +17,7 @@ var maxWaitTime = 30 * time.Second
 
 //Statement abstraction implements database/sql driver.Statement interface
 type Statement struct {
+	token     *string
 	execution *exec.Execution
 	state     *exec.State
 	client    *dynamodb.Client
@@ -42,7 +44,7 @@ func (s *Statement) ExecContext(ctx context.Context, args []driver.NamedValue) (
 	if err != nil {
 		return nil, err
 	}
-	if err = s.executeStatement(ctx, ql, parameters); err != nil {
+	if err = s.exec(ctx, ql, parameters); err != nil {
 		return nil, err
 	}
 	return &result{totalRows: 1}, err
@@ -110,7 +112,6 @@ func asNamedValues(args []driver.Value) []driver.NamedValue {
 func (s *Statement) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	ql := s.execution.Parti.Query
 	deserializer := ndynamodb.NewDeserializeMiddleware(s.execution.Type)
-
 	state := s.execution.NewState(args)
 	parameters, err := state.QueryParameters()
 	if err != nil {
@@ -132,7 +133,7 @@ func (s *Statement) QueryContext(ctx context.Context, args []driver.NamedValue) 
 	return rows, err
 }
 
-func (s *Statement) executeStatement(ctx context.Context, query string, parameters []types.AttributeValue) error {
+func (s *Statement) exec(ctx context.Context, query string, parameters []types.AttributeValue) error {
 	_, err := s.client.ExecuteStatement(ctx, &dynamodb.ExecuteStatementInput{
 		Statement:  &query,
 		Parameters: parameters,

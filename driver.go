@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	aws2 "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/viant/scy/auth/aws"
@@ -25,6 +26,9 @@ type Driver struct{}
 // See https://github.com/viant/dynamodb#dsn-data-source-name for how
 // the DSN string is formatted
 func (d Driver) Open(dsn string) (driver.Conn, error) {
+	if dsn == "" {
+		return nil, fmt.Errorf("dynamodb dsn was empty")
+	}
 	cfg, err := ParseDSN(dsn)
 	if err != nil {
 		return nil, err
