@@ -63,13 +63,25 @@ func (e *Execution) ReleaseState(state *State) {
 }
 
 func (e *Execution) initCriteria() error {
-	qualify := e.query.Qualify
-	if qualify == nil {
+	var qualifies []*expr.Qualify
+
+	if e.query.IsNested() {
+		nested := e.query.NestedSelect()
+		if nested.Qualify != nil {
+			qualifies = append(qualifies, nested.Qualify)
+		}
+	}
+	if aQuery := e.query; aQuery.Qualify != nil {
+		qualifies = append(qualifies, aQuery.Qualify)
+	}
+	if len(qualifies) == 0 {
 		return nil
 	}
-	err := e.parseCriteria(qualify.X)
-	if err != nil {
-		return err
+	for _, qualify := range qualifies {
+		err := e.parseCriteria(qualify.X)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -126,6 +138,9 @@ func (e *Execution) parseCriteria(x node.Node) error {
 			return err
 		}
 		return e.parseCriteria(actual.Y)
+	case *expr.Literal:
+	default:
+		panic(fmt.Sprintf("%T: unupported", actual))
 	}
 	return nil
 }
@@ -141,15 +156,13 @@ func (e *Execution) appendPlaceholder(x, y node.Node) (string, bool, error) {
 	}
 	return paramName, false, nil
 }
-
-func (e *Execution) buildQuery() {
+func (e *Execution) buildQuery() error {
 	e.Parti = &PartiQL{}
 
 	query := e.query
 	if query.IsNested() {
 		query = query.NestedSelect()
 	}
-
 	builder := new(bytes.Buffer)
 	builder.WriteString("SELECT ")
 	if e.Type.Wildcard {
@@ -171,6 +184,7 @@ func (e *Execution) buildQuery() {
 	if query.Qualify != nil {
 		qualifies = append(qualifies, sqlparser.Stringify(query.Qualify.X))
 	}
+
 	if query != e.query && e.query.Qualify != nil {
 		qualifies = append(qualifies, sqlparser.Stringify(e.query.Qualify))
 	}
@@ -186,31 +200,33 @@ func (e *Execution) buildQuery() {
 		builder.WriteString(" ORDER BY ")
 		builder.WriteString(sqlparser.Stringify(e.query.OrderBy))
 	}
-
 	e.Parti = &PartiQL{
 		Query: builder.String(),
 	}
+	return nil
 }
 
 func (e *Execution) initQuery(desc *types.TableDescription) error {
 
-	query := e.query
-	if query.IsNested() {
-		query = query.NestedSelect()
+	aQuery := e.query
+	var outerColumns = Columns{}
+	if aQuery.IsNested() {
+		if err := outerColumns.init(aQuery); err != nil {
+			return err
+		}
+		aQuery = aQuery.NestedSelect()
 	}
-	rowType := NewType(query.List.IsStarExpr())
-	if err := e.adjustQueryType(desc, rowType, query); err != nil {
+	rowType := NewType(aQuery.List.IsStarExpr())
+	if err := e.adjustQueryType(desc, rowType, aQuery, outerColumns); err != nil {
 		return err
 	}
 	e.Type = rowType
 	e.initState()
-	e.buildQuery()
-	return nil
-
+	return e.buildQuery()
 }
 
-func (e *Execution) adjustQueryType(desc *types.TableDescription, rowType *Type, query *query.Select) error {
-
+func (e *Execution) adjustQueryType(desc *types.TableDescription, rowType *Type, query *query.Select, oCcolumns Columns) error {
+	outerColumns := oCcolumns.index()
 	for _, key := range desc.KeySchema {
 		rowType.Keys[*key.AttributeName] = key.KeyType
 	}
@@ -223,11 +239,32 @@ func (e *Execution) adjustQueryType(desc *types.TableDescription, rowType *Type,
 		switch actual := item.Expr.(type) {
 		case *expr.Ident:
 			attrType, isRequired := attrTypes[actual.Name]
-			rowType.Add(actual.Name, item.Alias, attrType, isRequired)
+			cName := item.Alias
+			if cName == "" {
+				cName = actual.Name
+			}
+			if !outerColumns.ShallOutput(cName) {
+				continue
+			}
+			_, column := rowType.Add(actual.Name, item.Alias, attrType, isRequired)
+			if outer, ok := outerColumns[cName]; ok {
+				column.DefaultValue = outer.DefaultValue
+			}
+
 		case *expr.Selector:
 			name := sqlparser.Stringify(actual)
 			attrType, isRequired := attrTypes[name]
-			rowType.Add(name, item.Alias, attrType, isRequired)
+			cName := item.Alias
+			if cName == "" {
+				cName = name
+			}
+			if !outerColumns.ShallOutput(cName) {
+				continue
+			}
+			_, column := rowType.Add(name, item.Alias, attrType, isRequired)
+			if outer, ok := outerColumns[cName]; ok {
+				column.DefaultValue = outer.DefaultValue
+			}
 		case *expr.Call:
 			fName := strings.ToLower(sqlparser.Stringify(actual.X))
 			if attrType, ok := attributeTypeCast[fName]; ok {

@@ -133,6 +133,9 @@ func (s *State) Reconcile() error {
 		if column.Func == nil {
 			field := &s.Type.Fields[column.Fields[0]]
 			s.Columns[column.Pos] = s.Fields[field.Pos]
+			if s.Columns[column.Pos] == nil {
+				s.Columns[column.Pos] = column.DefaultValue
+			}
 			continue
 		}
 		if s.Columns[column.Pos], err = column.Func.Exec(nil, s); err != nil {

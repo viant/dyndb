@@ -6,14 +6,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/toolbox"
-	"os"
 	"testing"
 )
 
 func TestStatement_Query(t *testing.T) {
 
-	///dsn := "dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy"
-	dsn := os.Getenv("TEST_DSN")
+	dsn := "dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy"
+	//dsn := os.Getenv("TEST_DSN")
 	db, err := sql.Open("dynamodb", dsn)
 	if dsn == "" {
 		t.Skipf("failed to connect to db %v", err)
@@ -44,6 +43,41 @@ func TestStatement_Query(t *testing.T) {
 		expect      string
 		skip        bool
 	}{
+
+		{
+			description: "coalesce function",
+			initSQL: []string{
+				`DROP TABLE IF EXISTS Publication`,
+				`CREATE TABLE IF NOT EXISTS Publication(
+				ISBN TEXT HASH KEY,
+				Published INT RANGE KEY)`,
+				`INSERT INTO Publication(ISBN, Name, Published, Status, Categories) VALUES('AAA-BBB', 'Title 1', 20020121, 1, LIST('TRAVEL', 'FINANCE'))`,
+				`INSERT INTO Publication(ISBN, Name, Published, Status, Categories) VALUES('AAA-XXX', 'Title 2', 20020121, 1, LIST('FINANCE'))`,
+			},
+			SQL: `SELECT ISBN, Name, COALESCE(IsTravel, false) AS IsTravel, COALESCE(IsFinance, false) AS IsFinance 
+				FROM (  
+					SELECT 
+					    ISBN,
+					    Name, 
+       					ARRAY_EXISTS(Categories, 'TRAVEL') AS IsTravel ,
+						ARRAY_EXISTS(Categories, 'FINANCE') AS IsFinance 
+					FROM Publication WHERE ISBN = ?)`,
+			args: []interface{}{"AAA-XXX"},
+			append: func(rows *sql.Rows, records *[]interface{}) error {
+				record := &Publication{}
+				err = rows.Scan(&record.ISBN, &record.Name, &record.IsTravel, &record.IsFinance)
+				*records = append(*records, record)
+				return err
+			},
+			expect: `[{"@indexBy@":"ISBN"},
+	{
+		"ISBN": "AAA-XXX",
+		"Name": "Title 2",
+		"IsTravel": false,
+		"IsFinance": true
+	}
+]`,
+		},
 		{
 			description: "simple select",
 			initSQL: []string{

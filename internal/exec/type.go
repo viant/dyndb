@@ -1,8 +1,12 @@
 package exec
 
 import (
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/francoispqt/gojay"
+	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/query"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -23,9 +27,8 @@ type (
 
 	//Field represents underlying storage field
 	Field struct {
-		Pos  int
-		Name string
-
+		Pos      int
+		Name     string
 		Type     reflect.Type
 		linked   []int
 		Required bool
@@ -34,13 +37,63 @@ type (
 
 	//Column represents projection column
 	Column struct {
-		Pos    int
-		Name   string
-		Fields []int
-		Type   reflect.Type
-		Func   Function
+		Pos          int
+		Name         string
+		DefaultValue interface{}
+		Fields       []int
+		FieldNames   []string
+
+		Type reflect.Type
+		Func Function
 	}
+
+	Columns     []*Column
+	IndexColumn map[string]*Column
 )
+
+func (i IndexColumn) ShallOutput(name string) bool {
+	if len(i) == 0 {
+		return true
+	}
+	_, ok := i[name]
+	return ok
+}
+
+func (o *Columns) index() IndexColumn {
+	var result = make(map[string]*Column)
+	for i := range *o {
+		result[(*o)[i].Name] = (*o)[i]
+	}
+	return result
+}
+
+func (o *Columns) init(aQuery *query.Select) error {
+	for _, item := range aQuery.List {
+		column := &Column{}
+		if item.Alias != "" {
+			column.Name = item.Alias
+		}
+		switch actual := item.Expr.(type) {
+		case *expr.Call:
+			if fName := sqlparser.Stringify(actual.X); strings.ToLower(fName) == "coalesce" {
+				if len(actual.Args) != 2 {
+					return fmt.Errorf("coalesce invalid argsument count")
+				}
+				column.FieldNames = append(column.FieldNames, sqlparser.Stringify(actual.Args[0]))
+				if literal, ok := actual.Args[1].(*expr.Literal); ok {
+					param := NewLiteral(literal.Value, literal.Kind)
+					column.DefaultValue = param.Value
+				}
+			}
+		case *expr.Star:
+		case *expr.Ident, *expr.Selector:
+			if column.Name == "" {
+				column.Name = sqlparser.Stringify(actual)
+			}
+		}
+	}
+	return nil
+}
 
 //Column returns a column
 func (t *Type) Column(name string) *Column {
@@ -55,7 +108,7 @@ func (t *Type) Column(name string) *Column {
 }
 
 //Add adds field and column and link
-func (t *Type) Add(fName, cName, attrType string, isRequired bool) *Field {
+func (t *Type) Add(fName, cName, attrType string, isRequired bool) (*Field, *Column) {
 	field := t.Field(fName)
 	field.Required = isRequired
 	field.Type = Convert(attrType)
@@ -64,7 +117,7 @@ func (t *Type) Add(fName, cName, attrType string, isRequired bool) *Field {
 	}
 	column := t.Column(cName)
 	column.Link(field)
-	return field
+	return field, column
 }
 
 func normalizeKey(name string) string {
