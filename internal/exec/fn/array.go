@@ -31,6 +31,10 @@ func (a *arrayExists) Exec(value interface{}, state *exec.State) (interface{}, e
 	}
 	value = elements[0]
 
+	if value == nil {
+		return false, nil
+	}
+
 	if candidates, ok := value.([]interface{}); ok {
 		return a.hasMatch(candidates, elements), nil
 	}
